@@ -112,11 +112,11 @@ def extract_frame(video_path, time, output_path):
 
 def compute_psnr(img1, img2):
     return peak_signal_noise_ratio(img1, img2)
-    mse = np.mean((img1 - img2) ** 2)
-    if mse == 0:
-        return float('inf')
-    max_pixel = 255.0
-    return 20 * np.log10(max_pixel / np.sqrt(mse))
+    # mse = np.mean((img1 - img2) ** 2)
+    # if mse == 0:
+    #     return float('inf')
+    # max_pixel = 255.0
+    # return 20 * np.log10(max_pixel / np.sqrt(mse))
 
 
 def compute_ssim(img1, img2):
@@ -165,7 +165,7 @@ def align_videos(video_a_path, video_b_path):
             os.remove(frame_b_path)  # Remove the temporary file
 
         # First stage: Find 10 best candidates for each metric using only the first frame
-        candidates = {'psnr': [], 'ssim': [], 'ncc': []}
+        candidates = {'psnr': [], 'ssim': []}
         total_frames = int(duration_a * fps_a) - frame_count_b + 1
 
         with av.open(video_a_path) as container:
@@ -225,17 +225,19 @@ def align_videos(video_a_path, video_b_path):
                         (metric != 'psnr' and similarity_sum > best_similarity_sums[metric]):
                     best_similarity_sums[metric] = similarity_sum
                     best_alignments[metric] = start_frame / fps_a
-                    print(f"New best alignment using {metric.upper()} (score: {best_similarity_sums[metric]}): Video B starts at {best_alignments[metric]:.2f} seconds (frame: {start_frame}) in Video A")
+                    print(f"New best alignment using {metric.upper()} (score: {best_similarity_sums[metric]}): Video B starts at {best_alignments[metric]:.3f} seconds (frame: {start_frame}) in Video A")
 
     return best_alignments
 
 
-def create_composite_video(video_a_path, video_b_path, alignment_time, output_path):
+def create_composite_video(video_a_path, video_b_path, alignment_time, output_path, vertical_stack=False):
     info_b = get_video_info(video_b_path)
     duration_b = float(info_b['format']['duration'])
 
     # Set a high bitrate value (e.g., 60M for 60 Mbps)
     high_bitrate = '60M'
+
+    stack_videos = 'vstack' if vertical_stack else 'hstack'
 
     cmd = [
         'ffmpeg',
@@ -244,7 +246,7 @@ def create_composite_video(video_a_path, video_b_path, alignment_time, output_pa
         '-filter_complex',
         f'[0:v]trim=start={alignment_time}:duration={duration_b},setpts=PTS-STARTPTS[a];'
         f'[1:v]setpts=PTS-STARTPTS[b];'
-        f'[a][b]hstack=inputs=2[out]',
+        f'[a][b]{stack_videos}=inputs=2[out]',
         '-map', '[out]',
         '-t', str(duration_b),
         '-b:v', high_bitrate,
@@ -261,6 +263,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', help='Path to the output composite video file', default='.')
     parser.add_argument('--output_filename', help='Base name of the output composite video file',
                         default='aligned_composite_')
+    parser.add_argument('--vertical_stack', action='store_true', help='Stack videos vertically instead of side-by-side', default=False)
     parser.add_argument('--metrics', nargs='+', default=['psnr', 'ssim'], help='Metrics to use for video alignment')
     parser.add_argument('--verbose', action='store_true', help='Print verbose output')
     args = parser.parse_args()
@@ -272,16 +275,17 @@ if __name__ == '__main__':
     print("Aligning videos using metrics: {}".format(', '.join(args.metrics)))
     print("Output directory: {}".format(args.output_dir))
     print("Output base filename: {}".format(args.output_filename))
+    print("Stack videos: " + ("Vertically" if args.vertical_stack else "Side-by-side"))
 
     alignment_times = align_videos(video_a_path, video_b_path)
 
     for metric, alignment_time in alignment_times.items():
         if alignment_time is not None:
-            print(f"Best alignment using {metric.upper()}: Video B starts at {alignment_time:.2f} seconds in Video A")
+            print(f"Best alignment using {metric.upper()}: Video B starts at {alignment_time:.3f} seconds in Video A")
             output_path = args.output_dir + os.sep + args.output_filename + metric + '.mp4'
             if os.path.exists(output_path):
                 os.remove(output_path)
-            create_composite_video(video_a_path, video_b_path, alignment_time, output_path)
+            create_composite_video(video_a_path, video_b_path, alignment_time, output_path, args.vertical_stack)
             print(f"Composite video created: {output_path}")
         else:
             print(f"Video alignment failed using {metric.upper()}")
