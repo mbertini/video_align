@@ -122,14 +122,17 @@ def compute_ssim(img1, img2):
     return structural_similarity(img1, img2, channel_axis=2, data_range=255)
 
 
-def compute_similarities(img1, img2):
-    return {
-        'psnr': compute_psnr(img1, img2),
-        'ssim': compute_ssim(img1, img2),
-    }
+def compute_similarities(img1, img2, metrics: list):
+    result = {}
+    for metric in metrics:
+        if metric == 'psnr':
+            result['psnr'] = compute_psnr(img1, img2)
+        elif metric == 'ssim':
+            result['ssim'] = compute_ssim(img1, img2)
+    return result
 
 
-def align_videos(video_a_path, video_b_path):
+def align_videos(video_a_path, video_b_path, metrics: list):
     if not check_video_files(video_a_path, video_b_path):
         return None
 
@@ -181,7 +184,7 @@ def align_videos(video_a_path, video_b_path):
 
                 img_a = frame.to_ndarray(format='rgb24')
 
-                similarities = compute_similarities(img_a, frames_b[0])
+                similarities = compute_similarities(img_a, frames_b[0], metrics)
 
                 for metric, value in similarities.items():
                     candidates[metric].append((frame_idx, value))
@@ -276,7 +279,7 @@ if __name__ == '__main__':
     print("Output base filename: {}".format(args.output_filename))
     print("Stack videos: " + ("Vertically" if args.vertical_stack else "Side-by-side"))
 
-    alignment_times = align_videos(video_a_path, video_b_path)
+    alignment_times = align_videos(video_a_path, video_b_path, args.metrics)
 
     for metric, alignment_time in alignment_times.items():
         if alignment_time is not None:
