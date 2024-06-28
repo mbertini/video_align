@@ -1,8 +1,7 @@
 # Description: This script aligns two videos by finding the best alignment point in the first video
 #              using the peak signal-to-noise ratio (PSNR) and structural similarity index (SSIM) metrics.
 #              The aligned videos are then composited side-by-side into a single video.
-# Usage: python video_align.py video_a_path video_b_path [--output_dir OUTPUT_DIR] [--output_filename OUTPUT_FILENAME]
-#        [--metrics METRICS [METRICS ...]] [--verbose]
+# Usage: python video_align.py [video_a_path] [video_b_path] [--output_dir OUTPUT_DIR] [--output_filename OUTPUT_FILENAME] [--metrics METRICS] [--vertical_stack] [--verbose]
 # Example: python video_align.py long_high_quality.mp4 short_compressed.mp4 --output_dir . --output_filename aligned_composite_ --metrics psnr ssim --verbose
 
 import argparse
@@ -190,14 +189,14 @@ def align_videos(video_a_path, video_b_path):
         # Sort candidates for each metric
         for metric in candidates:
             if metric == 'psnr':
-                candidates[metric].sort(key=lambda x: x[1])  # Lower is better for PSNR
+                candidates[metric].sort(key=lambda x: x[1], reverse=True)  # Higher is better for PSNR
             else:
                 candidates[metric].sort(key=lambda x: x[1], reverse=True)  # Higher is better for SSIM
             candidates[metric] = candidates[metric][:10]  # Keep top 10 candidates
 
         # Second stage: Evaluate top candidates for each metric
         best_alignments = {'psnr': None, 'ssim': None}
-        best_similarity_sums = {'psnr': float('inf'), 'ssim': float('-inf')}
+        best_similarity_sums = {'psnr': float('-inf'), 'ssim': float('-inf')}
 
         for metric in ['psnr', 'ssim']:
             print(f"\nProcessing top candidates for {metric.upper()}")
@@ -221,8 +220,8 @@ def align_videos(video_a_path, video_b_path):
 
                     os.remove(frame_a_path)
 
-                if (metric == 'psnr' and similarity_sum < best_similarity_sums[metric]) or \
-                        (metric != 'psnr' and similarity_sum > best_similarity_sums[metric]):
+                if (metric == 'psnr' and similarity_sum > best_similarity_sums[metric]) or \
+                        (metric == 'ssim' and similarity_sum > best_similarity_sums[metric]):
                     best_similarity_sums[metric] = similarity_sum
                     best_alignments[metric] = start_frame / fps_a
                     print(f"New best alignment using {metric.upper()} (score: {best_similarity_sums[metric]}): Video B starts at {best_alignments[metric]:.3f} seconds (frame: {start_frame}) in Video A")
